@@ -1,0 +1,111 @@
+#!/bin/sh
+# $Id: screenie,v 1.30 2005/12/19 08:09:21 gloor Exp $
+# @(#) SCREENIE - SCREEN(1) session handler (wrapper)
+#
+# 1996/03/28 - written by Marc O. Gloor <mgloor@fhzh.ch>
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA
+
+
+SCREEN_Q="screen -q"
+SCREEN_LS="screen -ls"
+DEFAULT_SESSION_NAME="_"
+
+# option handling
+case "$1" in
+	# display version
+	-v) echo \$Revision: 1.30 $ | tr -d "$" && exit 0 ;;  # don't touch rcs ID
+	# run screen jobs given by commandline
+	-j) sname=$(echo $2) ;
+	    sname=$(echo $sname | tr " " "_") ;
+	    pjob=$(echo $3) ;
+		# starting screen job
+		${SCREEN_Q} -dmS $sname $pjob ; exit 0 ;;
+esac
+
+ask_session_name()
+{
+	echo -n " session name: " && read sname
+	sname=$(echo $sname | tr " " "_")
+	if [ -z "$sname" ]; then
+		sname=${DEFAULT_SESSION_NAME}
+	fi
+}
+
+# daemon mode
+while :; do
+	${SCREEN_Q} -wipe
+	clear
+	echo ""
+	echo " SCREENIE - terminal screen-session handler" 
+	echo " written by Marc O. Gloor <mgloor@fhzh.ch>"
+	echo ""
+	echo " active sessions :"
+	echo ""
+	${SCREEN_LS} | grep "tached" | sort | grep -Tn "^"
+	echo ""
+	echo " screenrc files :"
+	echo ""
+	ls -1 .screen* | grep -v "~$\|.swp$" | grep -Tn "^" | sed 's/.screenrc$/& (default)/'
+	echo ""
+	echo " main menu :"
+	echo ""
+	echo "   n   : new session"
+	echo "   f   : fast new session (with defaults, direct use)"
+	echo "   q   : quit"
+	echo ""
+	echo -n " select: "
+
+	# read for action
+	read answer
+
+	# actions for main menu
+	pjob=""
+	case $answer in
+		# add job
+		N|n) 
+			echo -n " screenrc file: " && read screenrc
+			if [ "$screenrc" ]; then
+				screenrcfile=`ls -1 .screen* | grep -v "~$\|.swp$"  | grep -n "^" | grep "^$screenrc:" | awk -F":" '{print $2}'`
+				if [ -f $screenrcfile ]; then
+					sname=`awk '/^sessionname/ {print $2} ' $screenrcfile`
+					if [ -z "$sname" ]; then
+						ask_session_name
+					fi
+					${SCREEN_Q} -c $screenrcfile -dmS $sname
+				fi
+			else
+				ask_session_name
+				echo -n " job (shell by default): " && read pjob
+				${SCREEN_Q} -dmS $sname $pjob
+			fi
+			;;
+		F|f) 
+			${SCREEN_Q} -c .screenrc -S ${DEFAULT_SESSION_NAME}
+			;;
+		# quit
+		0|Q|q) 
+			echo ""; exit ;;
+	esac  
+
+	# try and connect to the selected screen session ... if any
+	sessionid=`screen -ls | grep "tached" | sort | grep -n "^" | grep "^$answer:" | awk 'split($2, token, ".") {print token[1]}'`
+	if [ "$sessionid" ]; then
+		${SCREEN_Q} -xr $sessionid
+	fi 
+done
+
+exit 0
+

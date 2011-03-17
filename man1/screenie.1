@@ -1,0 +1,143 @@
+.TH SCREENIE 1 "March 28, 1996" "SCREENIE" "Utility Commands"
+.SH NAME
+screenie - terminal screen(1) session handler
+.SH SYNOPSIS
+.B screenie 
+.RB [\| \-v \|]
+.RB [\| \-j
+.IR jobname
+.IR job \|]
+.SH OPTIONS
+.TP
+interactive mode. see INTERACTIVE MODE.
+.TP
+.BI \-j\  name \  job
+Run the given screen
+.IR job .
+Give it the respective
+.IR name .
+.TP
+.BI \-v
+Display version.
+.SH DESCRIPTION
+
+Screenie is a small and lightweight \fBscreen\fR(1) frontend that is designed 
+to be a session handler that simplifies the process of administrating
+detached jobs by providing an interactive menu.
+
+Please note that you can improve the quality of
+.B screenie
+by sending patches, comments, hints, ideas, bug- and testreports to the author.
+.br
+.SH EXAMPLE
+.TP \w'screenie\ 'u
+.B screenie
+Run in interactive mode
+.TP 
+\fBscreenie \-j \fR"\fISystem stat\fR" "\fItop\fR"
+.SH INTERACTIVE MODE
+when called without arguments,
+.B screenie
+enter interactive mode.
+You can then choose : 
+.TP 
+.BI [1-9]*
+the number of a opened session
+if detached, attach it,
+if attached, attach again (see -x option of
+.B screen
+, especially warning about recursive attach).
+.TP 
+.BI [N|n]
+create a new session.
+.TP
+you will be asked to choose :
+ a .screenrc file for your new session (see MULTIPLE SCREENRC),
+ a name for the session (see SESSION NAME).
+ If you don't specify a .screenrc file you will be prompted for a job to be execute in the new session.
+.TP 
+.BI [F|f]
+.B fast mode :
+create new session with .screenrc and attach it directly. The session name is "_".
+.TP 
+.BI [0|Q|q]
+quit
+.B screenie
+.SH MULTIPLE SCREENRC
+.B screenie
+will look for multiple .screenrc* files in your home directory.
+It will look for file beginning by .screenrc such as '.screenrc.specialconfig'.
+Files ending with '~' (backup file), '.swp' (vi swap files) will be silently ignored.
+You should put default settings in your .screenrc file such as :
+
+.EX
+shell /bin/bash
+# terminfo and termcap for nice 256 color terminal
+# allow bold colors - necessary for some reason
+attrcolor b ".I"
+# tell screen how to set colors. AB = background, AF=foreground
+termcapinfo xterm* 'Co#256:AB=\E[48;5;%dm:AF=\E[38;5;%dm'
+termcapinfo rxvt*  'Co#256:AB=\E[48;5;%dm:AF=\E[38;5;%dm'
+
+defutf8 on          # utf8 always by default
+defbce "on"         # erase background with current bg color
+autodetach on       # detach on hangup
+startup_message off # don't display the copyright page
+#vbell off          # no annoying audible bell, please
+vbell on
+bell_msg '^G'
+
+caption splitonly
+shelltitle '#|'
+hardstatus alwayslastline
+hardstatus string "%{= ky}%-Lw%{=r}%20>%n %t%{= ky}%+Lw %{= ky}%-=| %{= kw}%M%d %c%{-} %{=r} ${USER}@%H "
+bind f eval "hardstatus ignore"
+bind F eval "hardstatus alwayslastline"
+# split
+bind j focus down
+bind k focus up
+bind t focus top
+bind b focus bottom
+.EE
+
+and put in .screenrc* file only specificites, such as :
+
+.B .screenrc.main
+
+.EX
+sessionname _main_
+source $HOME/.screenrc
+screen -t mutt mutt
+screen -t news newsbeuter
+.EE
+
+or :
+
+.B .screenrc.compil
+
+.EX
+sessionname compil
+source $HOME/.screenrc
+screen -t linux ssh linuxbox
+screen -t sun   ssh sunbox
+screen -t hpux  ssh hpbox
+screen -t aix   ssh aixbox
+screen -t bsd   ssh bsdbox
+.EE
+
+Note : the 
+.B shell
+line in .screenrc sample can be usefull to avoid creating a new window in screen with a shell value of '/usr/bin/screenie'.
+
+.SH SESSION NAMES
+As shown in the MULTIPLE SCREENRC section, you can set a particular name in your screenrc files using 
+.B sessionname
+setting of screen. When creating a new session with '[N|n]', if 
+.B screenie
+detect a sessinname in your .screenrc file, it won't ask for one.
+If you don't specify a session name when asked, "_" will be used as a a default one.
+
+.SH ABOUT
+screenie was written by Marc O. Gloor <mgloor@fhzh.ch>
+.SH SEE ALSO
+screen(1)

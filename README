@@ -1,0 +1,23 @@
+DESCRIPTION
+Screenie is a small and lightweight screen(1) frontend that is designed to be a session handler that simplifies the process of administrating detached jobs by providing an interactive menu.
+
+This version gives you the ability to :
+ - create new session with a single keystroke 'f' like fast
+ - use stored sessions in .screenrc* files
+ - read session names from the .screenrc* files
+ - ability to reattach attached screen sessions (screen -x)
+
+WHY
+
+It adds the few functionnalities I needed to the kiss original implementation of Marc O. Gloor.
+
+ALTERNATIVES
+
+Jiri Nemecek has rewriten screenie in perl and has added a few functionnalities (screen -x, screen -rd)
+If you want something more integrated into screen, you may want to look for screen-session on github, which is a patch for screen.
+If you want fancy profiles added to your sessions like cpu, and so on ... , you can use byobu from canonical/ubuntu guys.
+
+FUTURE MODIFICATIONS
+
+I may add support for tmux, as I like the split screen features it has.
+I will into screen -x/-rd 
