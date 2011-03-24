@@ -1,8 +1,10 @@
 #!/bin/sh
+# Screenie {{{1
 # $Id: screenie,v 1.30 2005/12/19 08:09:21 gloor Exp $
 # @(#) SCREENIE - SCREEN(1) session handler (wrapper)
 #
 # 1996/03/28 - written by Marc O. Gloor <mgloor@fhzh.ch>
+# 2011       - heavily modified by Frédéric Heulin <frederic.heulin@free.fr>
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -17,54 +19,183 @@
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
 # Foundation Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA
-
-
+# }}}1
+# Globals {{{1
 SCREEN_Q="screen -q"
-SCREEN_LS="screen -ls"
-DEFAULT_SESSION_NAME="_"
-
-# option handling
-case "$1" in
-	# display version
-	-v) echo \$Revision: 1.30 $ | tr -d "$" && exit 0 ;;  # don't touch rcs ID
-	# run screen jobs given by commandline
-	-j) sname=$(echo $2) ;
-	    sname=$(echo $sname | tr " " "_") ;
-	    pjob=$(echo $3) ;
-		# starting screen job
-		${SCREEN_Q} -dmS $sname $pjob ; exit 0 ;;
-esac
-
-ask_session_name()
+# }}}1
+# Functions {{{1
+# Commands {{{2
+# Running sessions {{{3
+screen_ls()
 {
-	echo -n " session name: " && read sname
-	sname=$(echo $sname | tr " " "_")
-	if [ -z "$sname" ]; then
-		sname=${DEFAULT_SESSION_NAME}
+	screen -ls | grep "tached" | sort
+}
+#}}}3
+# Available screenrc files {{{3
+ls_screenrc()
+{
+	ls -1 .screen* | grep -v \"~$\|.swp$\" | sed 's/.screenrc$/& (default)/'
+}
+#}}}3
+#}}}2
+# Cleanup {{{2
+clean_env()
+{
+	pjob=""
+	sname=""
+	screenrc=""
+	$SCREEN_Q -wipe
+	clear
+}
+#}}}2
+# Screenrc File {{{2
+DEFAULT_SCREENRC="$HOME/.screenrc"
+# Screenrc File Ask {{{3
+# ask for a screenrc file number in the list
+screenrc_ask()
+{
+	echo -n " screenrc file: " && read screenrc
+}
+#}}}3
+# Screenrc Option {{{3
+# Provide a screenrcfile based on user's choice
+# in  : screenrc number in the screenls cmd result
+# out : screenrcfilopt if one screenrcfile has been found
+#       in case screenrcfile contains a session name, sname is set
+screenrcopt_define()
+{
+	screenrcopt=""
+	if [ "$screenrc" ]; then
+		screenrcfile=`ls_screenrc | grep -n "^" | grep "^$screenrc:" | awk -F":" '{print $2}'`
+		# if screenrcfile does not exist, default to .screenrc if it exists
+		if [ ! -f $screenrcfile ]; then
+			if [ -f "$DEFAULT_SCREENRC" ]; then
+				screenrcfile="$DEFAULT_SCREENRC"
+			fi
+		fi
+
+		if [ -f $screenrcfile ]; then
+			screenrcopt="-c $screenrcfile"
+
+			# does it contain a sessionname ?
+			sname=`awk '/^sessionname/ {print $2} ' $screenrcfile`
+		fi
 	fi
 }
+#}}}3
+#}}}2
+# Sesssion Name {{{2
+DEFAULT_SESSION_NAME="_"
+# Session Name Default {{{3
+# give a default name if none defined
+sessionname_default()
+{
+	if [ -z "$sname" ]; then
+		sname=$DEFAULT_SESSION_NAME
+	fi
+}
+#}}}3
+# Session Name Sanitize {{{3
+# replace invalid session name characters with '_'
+sessionname_sanitize()
+{
+	sname=$(echo $sname | tr " " "_")
+}
+#}}}3
+# Session Name Ask {{{3
+# ask for a session name and deal with it
+sessionname_ask()
+{
+	if [ -z "$sname" ]; then
+		echo -n " session name: " && read sname
+	fi
+}
+#}}}3
+# Session option define {{{3
+# if session name is defined, pass the -S option
+sessionopt_define()
+{
+	sessionname_sanitize
+	sessionname_default
+	if [ "$sname" ]; then
+		snameopt="-S $sname"
+	fi
+}
+#}}}3
+#}}}2
+# Job {{{2
+# Session Name Ask {{{3
+# ask for a job
+job_ask()
+{
+	if [ -z "$pjob" ]; then
+		echo -n " job (shell by default): " && read pjob
+	fi
+}
+#}}}3
+# Session option define {{{3
+# if session name is defined, pass the -S option
+jobopt_define()
+{
+	if [ "$pjob" ]; then
+		pjobopt="$pjob"
+	fi
+}
+#}}}3
+#}}}2
+#}}}1
+# Options Parsing {{{1
+clean_env
+case "$1" in
+	# display version
+	-v)
+		echo \$Revision: 1.30 $ | tr -d "$"
+		exit 0
+		;;  # don't touch rcs ID
+	# run screen jobs given by commandline
+	-j)
+		screenrcopt_define
 
-# daemon mode
+		sname=$(echo $2) ;
+		sessionopt_define
+
+		pjob=$(echo $3) ;
+		jobopt_define
+
+		$SCREEN_Q -dm $screenrcopt $snameopt $pjobopt
+		exit 0
+		;;
+esac
+# }}}1
+# Daemon Mode {{{1
 while :; do
-	${SCREEN_Q} -wipe
-	clear
+	clean_env
 	echo ""
 	echo " SCREENIE - terminal screen-session handler" 
 	echo " written by Marc O. Gloor <mgloor@fhzh.ch>"
+	echo " customized version of Frédéric Heulin <frederic.heulin@free.fr>"
 	echo ""
-	echo " active sessions :"
+	echo " existing sessions :"
 	echo ""
-	${SCREEN_LS} | grep "tached" | sort | grep -Tn "^"
+	screen_ls | grep -Tn "^"
 	echo ""
 	echo " screenrc files :"
 	echo ""
-	ls -1 .screen* | grep -v "~$\|.swp$" | grep -Tn "^" | sed 's/.screenrc$/& (default)/'
+	ls_screenrc | grep -Tn "^"
 	echo ""
 	echo " main menu :"
 	echo ""
-	echo "   n   : new session"
-	echo "   f   : fast new session (with defaults, direct use)"
-	echo "   q   : quit"
+	echo "   <num> : existing session number"
+	echo "   n     : new session (interactive mode)"
+	echo "   q     : quit"
+	echo ""
+	echo "   [num]/[name][/[job]] : create a new session"
+	echo ""
+	echo "           num  : based on screenrcfile number 'num'"
+	echo "           name : name"
+	echo "           job  : started with job 'job'"
+	echo ""
+	echo "   <name>: same as \"/<name>\""
 	echo ""
 	echo -n " select: "
 
@@ -72,40 +203,72 @@ while :; do
 	read answer
 
 	# actions for main menu
-	pjob=""
+	# NB : case statement order matters
 	case $answer in
-		# add job
-		N|n) 
-			echo -n " screenrc file: " && read screenrc
-			if [ "$screenrc" ]; then
-				screenrcfile=`ls -1 .screen* | grep -v "~$\|.swp$"  | grep -n "^" | grep "^$screenrc:" | awk -F":" '{print $2}'`
-				if [ -f $screenrcfile ]; then
-					sname=`awk '/^sessionname/ {print $2} ' $screenrcfile`
-					if [ -z "$sname" ]; then
-						ask_session_name
-					fi
-					${SCREEN_Q} -c $screenrcfile -dmS $sname
-				fi
-			else
-				ask_session_name
-				echo -n " job (shell by default): " && read pjob
-				${SCREEN_Q} -dmS $sname $pjob
-			fi
-			;;
-		F|f) 
-			${SCREEN_Q} -c .screenrc -S ${DEFAULT_SESSION_NAME}
+		# do nothing from empty input
+		"")
 			;;
 		# quit
 		0|Q|q) 
-			echo ""; exit ;;
+			echo ""
+			exit
+			;;
+		# interactive mode
+		N|n) 
+			screenrc_ask
+			screenrcopt_define
+
+			# here we do not force/set the session name if defined in screenrc file
+			sessionname_ask
+			sessionopt_define
+
+			job_ask
+			jobopt_define
+
+			$SCREEN_Q -dm $screenrcopt $snameopt $pjobopt
+			;;
+		# fast : same as n/N but non interactive
+		# syntax : screenrc/sname/pjob, at least one /
+		# samples :
+		#   2/             : new session using screenrcfile number 2, with default name, default job
+		#   /test          : new session using .screenrc file, named 'test', default job
+		#   //top          : new session using .screenrc file, with default name, starting top
+		#   3/plop/        : new session using screenrcfile number 3, named 'plop', default job
+		#   3/monitor/top  : new session using screenrcfile number 3, named 'monitor',
+		#                    add a screen window running top to the ones defined in the screenrcfile 3
+		#   ///usr/bin/top : new session using .screenrc file, with default name, starting /usr/bin/top
+		*/*)
+			screenrc=`echo $answer | awk -F"/" '{print $1}'`
+			screenrcopt_define
+
+			# here we can force/set the session name (even if defined in screenrc file)
+			sname=`echo $answer | awk -F"/" '{print $2}'`
+			sessionopt_define
+
+			pjob=`echo $answer | cut -f3- -d'/'`
+			jobopt_define
+
+			$SCREEN_Q $screenrcopt $snameopt $pjobopt
+			;;
+		# try and connect to the selected screen session ... if any
+		[0-9]*)
+			sessionid=`screen_ls | grep -n "^" | grep "^$answer:" | awk 'split($2, token, ".") {print token[1]}'`
+			if [ "$sessionid" ]; then
+				$SCREEN_Q -xr $sessionid
+			fi
+			;;
+		# fast : create a new session with the given name
+		*)
+			screenrcopt_define
+
+			sname=$answer 
+			sessionopt_define
+
+			jobopt_define
+
+			$SCREEN_Q $screenrcopt $snameopt $pjobopt
+			;;
 	esac  
-
-	# try and connect to the selected screen session ... if any
-	sessionid=`screen -ls | grep "tached" | sort | grep -n "^" | grep "^$answer:" | awk 'split($2, token, ".") {print token[1]}'`
-	if [ "$sessionid" ]; then
-		${SCREEN_Q} -xr $sessionid
-	fi 
 done
-
+# }}}1
 exit 0
-
