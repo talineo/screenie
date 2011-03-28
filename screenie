@@ -21,20 +21,58 @@
 # Foundation Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA
 # }}}1
 # Globals {{{1
+# we don't need screen to make some noise
 SCREEN_Q="screen -q"
 # }}}1
 # Functions {{{1
-# Commands {{{2
-# Running sessions {{{3
+# Session management {{{2
+# Running Sessions {{{3
 screen_ls()
 {
 	screen -ls | grep "tached" | sort
 }
 #}}}3
-# Available screenrc files {{{3
-ls_screenrc()
+# Exclude Session IDs already existing with the same name {{{3
+session_exclude_ids()
 {
-	ls -1 .screen* | grep -v \"~$\|.swp$\" | sed 's/.screenrc$/& (default)/'
+	if [ "$sname" ]; then
+		excludeids=`screen_ls | grep "$sname" | awk 'split($1, token, ".") {print token[1]}' |awk '{while(getline record){$0=$0".'$sname'\\\\|"record} print $0}'`
+	fi
+}
+#}}}3
+# Session Get ID {{{3
+session_get_id()
+{
+	if [ "$sname" ]; then
+		if [ "$excludeids" ]; then
+			sessionid=`screen_ls | grep "$sname" | grep -v "$excludeids" | awk 'split($1, token, ".") {print token[1]}'`
+		else
+			sessionid=`screen_ls | grep "$sname" | awk 'split($1, token, ".") {print token[1]}'`
+		fi
+	fi
+}
+#}}}3
+# Session Create {{{3
+session_create()
+{
+	$SCREEN_Q -dm $screenrcopt $snameopt $pjobopt
+}
+#}}}3
+# Create a session and connect directly to it {{{3
+session_create_go()
+{
+	session_exclude_ids
+	session_create
+	session_get_id
+	session_connect_id
+}
+#}}}3
+# Connect to Session with selected ID {{{3
+session_connect_id()
+{
+	if [ "$sessionid" ]; then
+		$SCREEN_Q -xr $sessionid
+	fi
 }
 #}}}3
 #}}}2
@@ -44,12 +82,20 @@ clean_env()
 	pjob=""
 	sname=""
 	screenrc=""
+	sessionid=""
+	excludeids=""
 	$SCREEN_Q -wipe
 	clear
 }
 #}}}2
-# Screenrc File {{{2
+# Screenrc Files {{{2
 DEFAULT_SCREENRC="$HOME/.screenrc"
+# Available screenrc files {{{3
+ls_screenrc()
+{
+	ls -1 .screen* | grep -v \"~$\|.swp$\" | sed 's/.screenrc$/& (default)/'
+}
+#}}}3
 # Screenrc File Ask {{{3
 # ask for a screenrc file number in the list
 screenrc_ask()
@@ -111,9 +157,9 @@ sessionname_ask()
 	fi
 }
 #}}}3
-# Session option define {{{3
+# Session name option define {{{3
 # if session name is defined, pass the -S option
-sessionopt_define()
+sessionnameopt_define()
 {
 	sessionname_sanitize
 	sessionname_default
@@ -143,7 +189,6 @@ jobopt_define()
 }
 #}}}3
 #}}}2
-#}}}1
 # Options Parsing {{{1
 clean_env
 case "$1" in
@@ -157,12 +202,12 @@ case "$1" in
 		screenrcopt_define
 
 		sname=$(echo $2) ;
-		sessionopt_define
+		sessionnameopt_define
 
 		pjob=$(echo $3) ;
 		jobopt_define
 
-		$SCREEN_Q -dm $screenrcopt $snameopt $pjobopt
+		session_create
 		exit 0
 		;;
 esac
@@ -170,33 +215,39 @@ esac
 # Daemon Mode {{{1
 while :; do
 	clean_env
-	echo ""
-	echo " SCREENIE - terminal screen-session handler" 
-	echo " written by Marc O. Gloor <mgloor@fhzh.ch>"
-	echo " customized version of Frédéric Heulin <frederic.heulin@free.fr>"
-	echo ""
-	echo " existing sessions :"
-	echo ""
+	cat << HEADER
+
+ SCREENIE - terminal screen-session handler
+ written by Marc O. Gloor <mgloor@fhzh.ch>
+ customized version of Frédéric Heulin <frederic.heulin@free.fr>
+
+ existing sessions :
+
+HEADER
 	screen_ls | grep -Tn "^"
-	echo ""
-	echo " screenrc files :"
-	echo ""
+	cat << SCREENLS
+
+ screenrc files :
+
+SCREENLS
 	ls_screenrc | grep -Tn "^"
-	echo ""
-	echo " main menu :"
-	echo ""
-	echo "   <num> : existing session number"
-	echo "   n     : new session (interactive mode)"
-	echo "   q     : quit"
-	echo ""
-	echo "   [num]/[name][/[job]] : create a new session"
-	echo ""
-	echo "           num  : based on screenrcfile number 'num'"
-	echo "           name : name"
-	echo "           job  : started with job 'job'"
-	echo ""
-	echo "   <name>: same as \"/<name>\""
-	echo ""
+	cat << FOOTER
+
+ main menu :
+
+   <num> : existing session number
+   n     : new session (interactive mode)
+   q     : quit
+
+   [num]/[name][/[job]] : create a new session
+
+           num  : based on screenrcfile number 'num'
+           name : name
+           job  : started with job 'job'
+
+   <name>: same as "/<name>"
+
+FOOTER
 	echo -n " select: "
 
 	# read for action
@@ -214,20 +265,23 @@ while :; do
 			exit
 			;;
 		# interactive mode
+		# traditional call, we only create a session
 		N|n) 
 			screenrc_ask
 			screenrcopt_define
 
 			# here we do not force/set the session name if defined in screenrc file
 			sessionname_ask
-			sessionopt_define
+			sessionnameopt_define
 
 			job_ask
 			jobopt_define
 
-			$SCREEN_Q -dm $screenrcopt $snameopt $pjobopt
+			session_create
 			;;
-		# fast : same as n/N but non interactive
+		# fast : same as n/N but :
+		#   - non interactive
+		#   - connect directly to the created session
 		# syntax : screenrc/sname/pjob, at least one /
 		# samples :
 		#   2/             : new session using screenrcfile number 2, with default name, default job
@@ -243,30 +297,30 @@ while :; do
 
 			# here we can force/set the session name (even if defined in screenrc file)
 			sname=`echo $answer | awk -F"/" '{print $2}'`
-			sessionopt_define
+			sessionnameopt_define
 
 			pjob=`echo $answer | cut -f3- -d'/'`
 			jobopt_define
 
-			$SCREEN_Q $screenrcopt $snameopt $pjobopt
+			session_create_go
 			;;
 		# try and connect to the selected screen session ... if any
 		[0-9]*)
 			sessionid=`screen_ls | grep -n "^" | grep "^$answer:" | awk 'split($2, token, ".") {print token[1]}'`
-			if [ "$sessionid" ]; then
-				$SCREEN_Q -xr $sessionid
-			fi
+			session_connect_id
 			;;
-		# fast : create a new session with the given name
+		# fast :
+		#  - create a new session with the given name
+		#  - same as '/name' case above
 		*)
 			screenrcopt_define
 
 			sname=$answer 
-			sessionopt_define
+			sessionnameopt_define
 
 			jobopt_define
 
-			$SCREEN_Q $screenrcopt $snameopt $pjobopt
+			session_create_go
 			;;
 	esac  
 done
